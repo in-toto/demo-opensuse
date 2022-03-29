@@ -1,16 +1,16 @@
-from in_toto.util import import_rsa_key_from_file
+from securesystemslib import interface
 from in_toto.models.layout import Layout
+from in_toto.models.metadata import Metablock
 
 def main():
   # Load Alice's private key to later sign the layout
-  key_alice = import_rsa_key_from_file("alice")
+  key_alice = interface.import_rsa_privatekey_from_file("alice")
   # Fetch and load Bob's and Carl's public keys
   # to specify that they are authorized to perform certain step in the layout
-  key_bob = import_rsa_key_from_file("../functionary_bob/bob.pub")
-  key_carl = import_rsa_key_from_file("../functionary_carl/carl.pub")
+  key_bob = interface.import_rsa_publickey_from_file("../functionary_bob/bob.pub")
+  key_carl = interface.import_rsa_publickey_from_file("../functionary_carl/carl.pub")
 
   layout = Layout.read({
-    "signed": {
       "_type": "layout",
       "keys": {
           key_bob["keyid"]: key_bob,
@@ -22,7 +22,7 @@ def main():
           "expected_products": [["CREATE", "project.meta"],
               ["CREATE", "package.meta"]],
           "pubkeys": [key_bob["keyid"]],
-          "expected_command": "",
+          "expected_command": [],
           "threshold": 1,
         },{
           "name": "clone",
@@ -35,21 +35,28 @@ def main():
               ["CREATE", "connman/connman.keyring"],
               ["CREATE", "connman/connman.spec"]],
           "pubkeys": [key_bob["keyid"]],
-          "expected_command": "",
+          "expected_command": [],
           "threshold": 1,
         },{
           "name": "update-changelog",
           "expected_materials": [["MATCH", "connman/connman.changes", "WITH", "PRODUCTS", "FROM", "clone"]],
           "expected_products": [["ALLOW", "connman/connman.changes"]],
           "pubkeys": [key_bob["keyid"]],
-          "expected_command": "",
+          "expected_command": [],
           "threshold": 1,
         },{
           "name": "test",
           "expected_materials": [],
           "expected_products": [],
           "pubkeys": [key_carl["keyid"]],
-          "expected_command": "osc build openSUSE_Factory x86_64 connman/connman.spec",
+          "expected_command": [
+              "osc",
+              "build",
+              "--clean",
+              "--trust-all-projects",
+              "openSUSE_Tumbleweed",
+              "x86_64",
+          ],
           "threshold": 1,
         },{
           "name": "package",
@@ -66,7 +73,7 @@ def main():
               ["CREATE", "connman-1.30-1.1.src.rpm"],
           ],
           "pubkeys": [key_carl["keyid"]],
-          "expected_command": "",
+          "expected_command": [],
           "threshold": 1,
         }],
       "inspect": [{
@@ -97,20 +104,26 @@ def main():
               ["ALLOW", "verify-signature.sh"],
               ["ALLOW", "root.layout"],
           ],
-          "run": "unrpm connman-1.30-1.1.src.rpm",
+          "run": [
+              "unrpm",
+              "connman-1.30-1.1.src.rpm",
+          ]
         },{
           "name": "verify-signature",
           "expected_materials": [["ALLOW", "*"]],
           "expected_products": [["ALLOW", "*"]],
-          "run": "./verify-signature.sh",
+          "run": [
+              "./verify-signature.sh",
+          ],
         }],
-    },
-    "signatures": []
   })
 
-  # Sign and dump layout to "layout.root"
-  layout.sign(key_alice)
-  layout.dump()
+  metadata = Metablock(signed=layout)
+
+  # Sign and dump layout to "root.layout"
+  metadata.sign(key_alice)
+  metadata.dump("root.layout")
+  print('Created demo in-toto layout as "root.layout".')
 
 if __name__ == '__main__':
   main()
